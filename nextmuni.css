@@ -1,6 +1,27 @@
-.nextmuni dl {
-  margin: 0;
+.nextmuni-table {
+	border-collapse: collapse;
+	width: 100%;
 }
-.nextmuni dd {
-  font-size: .8em;
+
+.nextmuni-table tr {
+	line-height: 1.6;
+}
+
+.nextmuni-emoji {
+	padding-right: 6px;
+	font-size: 0.85em;
+}
+
+.nextmuni-label {
+	padding-right: 10px;
+	white-space: nowrap;
+}
+
+.nextmuni-times {
+	text-align: right;
+	white-space: nowrap;
+}
+
+.nextmuni-loading {
+	padding: 4px 0;
 }

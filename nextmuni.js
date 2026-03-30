@@ -1,118 +1,114 @@
 Module.register("nextmuni", {
-    // Default module config.
-    defaults: {
-        text: "Next Muni!",
-        token: '3d93f7cc-bb3c-45de-bab9-121aba88ddfc',
-        routes: [
-            /**
-             * {
-             * 	stop_id: 15194,
-             *   label:   'work'
-             * }
-             */
-            {
-                stop_id: 13915,
-                label: 'To work'
-            },
-            {
-                stop_id: 16995,
-                label: "From work"
-            },
-            {
-                stop_id: 17252,
-                label: "From Michelle's to home"
-            }
-        ],
-        maxTimesForDisplay: 4,
-        animationSpeed: 2 * 1000,
-        debug: true
-    },
+	defaults: {
+		token: "",
+		routes: [],
+		maxTimesForDisplay: 3,
+		animationSpeed: 2 * 1000,
+		debug: false
+	},
 
-    times: [],
+	times: [],
 
-    // Define start sequence.
-    start: function() {
-        this.log("Starting Module: " + this.name);
-        this.loaded = false;
-        this.broadcastConfig();
-        this.registerRoutes();
-    },
+	start: function () {
+		this.log("Starting Module: " + this.name);
+		this.loaded = false;
+		this.broadcastConfig();
+		this.registerRoutes();
+	},
 
-    // Override socket notification handler.
-    socketNotificationReceived: function(notification, payload) {
-        this.log('socket notification received: ' + notification);
-        if (notification === "UPDATED_TIMES") {
-            this.log('Received updated times');
-            this.updateTimes(payload);
-        }
-    },
+	socketNotificationReceived: function (notification, payload) {
+		this.log("socket notification received: " + notification);
+		if (notification === "UPDATED_TIMES") {
+			this.log("Received updated times");
+			this.updateTimes(payload);
+		}
+	},
 
-    // Override dom generator.
-    getDom: function() {
-        var wrapper = document.createElement("div");
+	getDom: function () {
+		var wrapper = document.createElement("div");
+		wrapper.className = "nextmuni";
 
-        var dl = document.createElement('dl');
+		if (!this.loaded) {
+			wrapper.innerHTML = '<div class="nextmuni-loading dimmed light small">Loading transit times\u2026</div>';
+			return wrapper;
+		}
 
-        this.log('Updating Next Muni Dom with routes:');
-        this.log(this.times);
+		var table = document.createElement("table");
+		table.className = "nextmuni-table small";
 
-        for (i in this.config.routes) {
-            var stop_id = this.config.routes[i].stop_id;
-            var label = this.config.routes[i].label;
+		for (var i = 0; i < this.config.routes.length; i++) {
+			var route = this.config.routes[i];
+			var stop_id = route.stop_id;
+			var label = route.label;
+			var type = route.type || "bus";
+			var emoji = type === "rail" ? "\uD83D\uDE83" : "\uD83D\uDE8C"; // 🚃 or 🚌
 
-            var dt = document.createElement('dt');
-            var dd = document.createElement('dd');
-            dt.innerHTML = label;
+			var tr = document.createElement("tr");
 
-            if (stop_id in this.times && this.times[stop_id].length > 0) {
-              var display_times = this.times[stop_id].slice(0, this.config.maxTimesForDisplay);
-                dd.innerHTML = display_times.join(', ') + ' minutes';
-            } else if (this.loaded === false) {
-                dd.innerHTML = 'One moment while times load...';
-            } else {
-                dd.innerHTML = 'No times currently';
-            }
+			// Emoji cell
+			var tdEmoji = document.createElement("td");
+			tdEmoji.className = "nextmuni-emoji";
+			tdEmoji.textContent = emoji;
+			tr.appendChild(tdEmoji);
 
-            dl.append(dt);
-            dl.append(dd);
-        }
+			// Label cell
+			var tdLabel = document.createElement("td");
+			tdLabel.className = "nextmuni-label bright";
+			tdLabel.textContent = label;
+			tr.appendChild(tdLabel);
 
-        wrapper.append(dl);
+			// Times cell
+			var tdTimes = document.createElement("td");
+			tdTimes.className = "nextmuni-times light";
 
-        return wrapper;
-    },
+			if (stop_id in this.times && this.times[stop_id].length > 0) {
+				var display_times = this.times[stop_id].slice(0, this.config.maxTimesForDisplay);
+				var formatted = display_times.map(function (m) {
+					return m === 0 ? "now" : m + "m";
+				});
+				tdTimes.textContent = formatted.join(", ");
+			} else {
+				tdTimes.textContent = "—";
+				tdTimes.classList.add("dimmed");
+			}
 
-    getStyles: function() {
-        return [
-            this.file('nextmuni.css')
-        ];
-    },
+			tr.appendChild(tdTimes);
+			table.appendChild(tr);
+		}
 
-    broadcastConfig: function() {
-        this.sendSocketNotification("SET_CONFIG", this.config);
-    },
+		wrapper.appendChild(table);
+		return wrapper;
+	},
 
-    registerRoutes: function() {
-        for (var r in this.config.routes) {
-            var route = this.config.routes[r];
-            this.log('Adding route');
-            this.log(route);
-            this.sendSocketNotification("ADD_ROUTE", {
-                route: route,
-                config: this.config
-            });
-        }
-    },
+	getStyles: function () {
+		return [this.file("nextmuni.css")];
+	},
 
-    updateTimes: function(times) {
-        this.times = times;
-        this.loaded = true;
-        this.updateDom(this.config.animationSpeed);
-    },
+	broadcastConfig: function () {
+		this.sendSocketNotification("SET_CONFIG", this.config);
+	},
 
-    log: function(message) {
-        if (this.config.debug) {
-            Log.log(message);
-        }
-    }
+	registerRoutes: function () {
+		for (var r = 0; r < this.config.routes.length; r++) {
+			var route = this.config.routes[r];
+			this.log("Adding route");
+			this.log(route);
+			this.sendSocketNotification("ADD_ROUTE", {
+				route: route,
+				config: this.config
+			});
+		}
+	},
+
+	updateTimes: function (times) {
+		this.times = times;
+		this.loaded = true;
+		this.updateDom(this.config.animationSpeed);
+	},
+
+	log: function (message) {
+		if (this.config.debug) {
+			Log.log(message);
+		}
+	}
 });
