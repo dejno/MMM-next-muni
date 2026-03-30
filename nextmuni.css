@@ -7,9 +7,10 @@
 	line-height: 1.6;
 }
 
-.nextmuni-emoji {
-	padding-right: 6px;
+.nextmuni-icon {
+	padding-right: 8px;
 	font-size: 0.85em;
+	opacity: 0.7;
 }
 
 .nextmuni-label {

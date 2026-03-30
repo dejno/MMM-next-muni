@@ -41,15 +41,17 @@ Module.register("nextmuni", {
 			var stop_id = route.stop_id;
 			var label = route.label;
 			var type = route.type || "bus";
-			var emoji = type === "rail" ? "\uD83D\uDE83" : "\uD83D\uDE8C"; // 🚃 or 🚌
+			var iconClass = type === "rail" ? "fa-train-subway" : "fa-bus";
 
 			var tr = document.createElement("tr");
 
-			// Emoji cell
-			var tdEmoji = document.createElement("td");
-			tdEmoji.className = "nextmuni-emoji";
-			tdEmoji.textContent = emoji;
-			tr.appendChild(tdEmoji);
+			// Icon cell
+			var tdIcon = document.createElement("td");
+			tdIcon.className = "nextmuni-icon";
+			var icon = document.createElement("i");
+			icon.className = "fas " + iconClass;
+			tdIcon.appendChild(icon);
+			tr.appendChild(tdIcon);
 
 			// Label cell
 			var tdLabel = document.createElement("td");
