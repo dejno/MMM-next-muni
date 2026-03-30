@@ -1,17 +1,15 @@
 {
   "name": "MMM-next-muni",
-  "version": "1.0.0",
-  "description": "Get timing for next muni train module for MagicMirror",
+  "version": "2.0.0",
+  "description": "Real-time SF Muni departure times for MagicMirror using the 511.org API",
   "main": "index.js",
   "keywords": [
     "MagicMirror",
-    "nextmuni"
+    "nextmuni",
+    "muni",
+    "511"
   ],
   "author": "Alex Khadiwala",
   "license": "Apache-2.0",
-  "dependencies": {
-    "lodash": "^4.17.4",
-    "xml-js": "^1.0.2",
-    "json-parse": "^1.0.3"
-  }
+  "dependencies": {}
 }

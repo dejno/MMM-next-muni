@@ -1,174 +1,178 @@
-/* Magic Mirror
- * Fetcher
- *
- * By Michael Teeuw http://michaelteeuw.nl
- * MIT Licensed.
- */
-
 /* Route Fetcher
- * Responsible for requesting an update on the set interval and broadcasting the data.
+ * Fetches real-time departure predictions from the 511.org SIRI StopMonitoring API.
  *
- * attribute url string - URL of the news feed.
+ * attribute stop_id number - The stop code for the transit stop.
+ * attribute token string - 511.org API key.
  * attribute reloadInterval number - Reload interval in milliseconds.
  */
 
-var _ = require('lodash');
-var parse = require('json-parse');
-var http = require('http');
-var convert = require('xml-js');
+var https = require("https");
+var zlib = require("zlib");
 
-var RouteFetcher = function(stop_id, token, reloadInterval) {
-    console.log('Creating route fetcher for stop id: ' + stop_id);
+var RouteFetcher = function (stop_id, token, reloadInterval) {
+	console.log("Creating route fetcher for stop id: " + stop_id);
 
-    var self = this;
-    if (reloadInterval < 1000) {
-        reloadInterval = 1000;
-    }
+	var self = this;
+	if (reloadInterval < 1000) {
+		reloadInterval = 1000;
+	}
 
-    var reloadTimer = null;
-    this.stop_id = stop_id;
-    this.token = token;
-    this.debug = false;
-    this.depaurtue_times = [];
+	var reloadTimer = null;
+	this.stop_id = stop_id;
+	this.token = token;
+	this.debug = false;
+	this.departure_times = [];
 
-    var fetchFailedCallback = function() {};
-    var itemsReceivedCallback = function() {};
+	var fetchFailedCallback = function () {};
+	var itemsReceivedCallback = function () {};
 
+	this.scheduleTimer = function () {
+		clearInterval(reloadTimer);
+		reloadTimer = setInterval(function () {
+			self.fetchRoute();
+		}, reloadInterval);
+	};
 
-    /* private methods */
+	this.setReloadInterval = function (interval) {
+		if (interval > 1000 && interval < reloadInterval) {
+			reloadInterval = interval;
+		}
+	};
 
-    /* scheduleTimer()
-     * Schedule the timer for the next update.
-     */
+	function broadcastTimes() {
+		self.log("Broadcasting " + self.departure_times.length + " times.");
+		itemsReceivedCallback(self);
+	}
 
-    this.scheduleTimer = function() {
-        //console.log('Schedule update timer.');
-        clearInterval(reloadTimer);
-        reloadTimer = setInterval(function() {
-            self.fetchRoute();
-        }, reloadInterval);
-    };
+	this.onReceive = function (callback) {
+		itemsReceivedCallback = callback;
+	};
 
-    /* public methods */
+	this.onError = function (callback) {
+		fetchFailedCallback = callback;
+	};
 
-    /* setReloadInterval()
-     * Update the reload interval, but only if we need to increase the speed.
-     *
-     * attribute interval number - Interval for the update in milliseconds.
-     */
-    this.setReloadInterval = function(interval) {
-        if (interval > 1000 && interval < reloadInterval) {
-            reloadInterval = interval;
-        }
-    };
+	this.getStopId = function () {
+		return this.stop_id;
+	};
 
-    /* broadcastTimes()
-     * Broadcast the existing items.
-     */
-    function broadcastTimes() {
-        self.log('Broadcasting ' + self.departure_times.length + ' times.');
-        itemsReceivedCallback(self);
-    }
+	this.getToken = function () {
+		return this.token;
+	};
 
-    this.onReceive = function(callback) {
-        itemsReceivedCallback = callback;
-    };
+	this.setDebug = function (debug) {
+		this.debug = debug;
+	};
 
-    this.onError = function(callback) {
-        fetchFailedCallback = callback;
-    };
+	this.getDepartureTimes = function () {
+		self.log("Getting departure_times");
+		self.log(self.departure_times);
+		return self.departure_times;
+	};
 
-    this.getStopId = function() {
-        return this.stop_id;
-    };
+	this.log = function (message) {
+		if (this.debug) {
+			console.log(message);
+		}
+	};
 
-    this.getToken = function() {
-        return this.token;
-    };
+	this.logError = function (message) {
+		if (this.debug) {
+			console.error(message);
+		}
+	};
 
-    this.setDebug = function(debug) {
-        this.debug = debug;
-    };
+	this.fetchRoute = function () {
+		self.log("Fetching route for stop id " + this.getStopId());
 
-    this.getDepartureTimes = function() {
-        self.log('Getting departure_times');
-        self.log(self.departure_times);
-        return self.departure_times;
-    };
+		var url =
+			"https://api.511.org/transit/StopMonitoring" +
+			"?api_key=" + encodeURIComponent(this.getToken()) +
+			"&agency=SF" +
+			"&stopCode=" + this.getStopId() +
+			"&format=json";
 
-    this.log = function(message) {
-        if (this.debug) {
-            console.log(message);
-        }
-    };
+		https
+			.get(url, function (response) {
+				var chunks = [];
 
-    this.logError = function(message) {
-        if (this.debug) {
-            console.error(message);
-        }
-    };
+				response.on("data", function (chunk) {
+					chunks.push(chunk);
+				});
 
-    this.fetchRoute = function() {
-        self.log('Fetching route for stop id ' + this.getStopId());
-        var base = 'http://services.my511.org/Transit2.0/';
-        var path = 'GetNextDeparturesByStopCode';
+				response.on("end", function () {
+					try {
+						var buffer = Buffer.concat(chunks);
 
-        var url = base + path + ".aspx?token=" + this.getToken() + "&stopCode=" + this.getStopId();
+						// Decompress if gzip
+						var encoding = response.headers["content-encoding"];
+						if (encoding === "gzip") {
+							buffer = zlib.gunzipSync(buffer);
+						} else if (encoding === "deflate") {
+							buffer = zlib.inflateSync(buffer);
+						}
 
-        http.get(url, function(response) {
-            var rawData = '';
+						// 511.org returns a UTF-8 BOM, strip it
+						var raw = buffer.toString("utf8");
+						if (raw.charCodeAt(0) === 0xfeff) {
+							raw = raw.slice(1);
+						}
 
-            response.setEncoding('utf8');
-            response.on('data', function(chunk) {
-                rawData += chunk;
-            });
-            response.on('end', function() {
-                try {
-                    var result = convert.xml2json(rawData, {
-                        compact: true
-                    });
-                    self.log(result);
-                    var parsed_json = parse([], result);
-                    var route_list = parsed_json.RTT.AgencyList.Agency.RouteList.Route;
+						var data = JSON.parse(raw);
+						var visits =
+							data.ServiceDelivery &&
+							data.ServiceDelivery.StopMonitoringDelivery &&
+							data.ServiceDelivery.StopMonitoringDelivery.MonitoredStopVisit;
 
-                    if (!_.isArray(route_list)) {
-                        route_list = [route_list];
-                    }
+						if (!visits || !Array.isArray(visits)) {
+							self.log("No visits found for stop " + self.getStopId());
+							self.departure_times = [];
+							broadcastTimes();
+							return;
+						}
 
-                    self.log('Received route list:');
-                    self.departure_times = [];
-                    _.each(route_list, function(route) {
-                        var route_times = route.RouteDirectionList.RouteDirection.StopList.Stop.DepartureTimeList.DepartureTime;
-                        if (!_.isArray(route_times)) {
-                            route_times = [route_times];
-                        }
-                        var times = _.map(route_times, function(t) {
-                            return parseInt(t._text);
-                        });
+						var now = new Date();
+						self.departure_times = [];
 
-                        self.departure_times = self.departure_times.concat(times);
-                        self.departure_times = _.sortBy(self.departure_times);
-                    });
-                    self.log('Departure Times:');
-                    self.log(self.departure_times);
+						visits.forEach(function (visit) {
+							var call = visit.MonitoredVehicleJourney && visit.MonitoredVehicleJourney.MonitoredCall;
+							if (!call) return;
 
-                    if (self.departure_times.count == 0) {
-                        self.log('No routes coming up');
-                        return;
-                    }
-                } catch (e) {
-                    console.error('There was an error getting times for stop_id ' + self.getStopId() + ': ' + e.message);
-                    self.departure_times = [];
-                }
+							var arrivalStr = call.ExpectedArrivalTime || call.AimedArrivalTime;
+							if (!arrivalStr) return;
 
-                broadcastTimes();
-            });
+							var arrivalTime = new Date(arrivalStr);
+							var minutes = Math.round((arrivalTime - now) / 60000);
 
-        }).on('error', function(e) {
-            console.error('Got error: ' + e.message);
-            callback(false);
-        });
-    };
+							if (minutes >= 0) {
+								self.departure_times.push(minutes);
+							}
+						});
+
+						self.departure_times.sort(function (a, b) {
+							return a - b;
+						});
+
+						self.log("Departure Times for stop " + self.getStopId() + ":");
+						self.log(self.departure_times);
+					} catch (e) {
+						console.error(
+							"There was an error getting times for stop_id " +
+								self.getStopId() +
+								": " +
+								e.message
+						);
+						self.departure_times = [];
+					}
+
+					broadcastTimes();
+				});
+			})
+			.on("error", function (e) {
+				console.error("Got error fetching stop " + self.getStopId() + ": " + e.message);
+				fetchFailedCallback(self, e);
+			});
+	};
 };
 
 module.exports = RouteFetcher;

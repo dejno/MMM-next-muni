@@ -39,7 +39,7 @@ module.exports = NodeHelper.create({
         var token = config.token;
         var reloadInterval = config.reloadInterval || 60 * 1000;
 
-        if (label.length == 0 || stop_id.length == 0 || token.length == 0) {
+        if (!label || !stop_id || !token) {
             self.sendSocketNotification("INVALID_PARAMS", 'label, stop_id, and valid token are all required');
             return;
         }

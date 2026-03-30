@@ -107,7 +107,7 @@ Module.register("nextmuni", {
     updateTimes: function(times) {
         this.times = times;
         this.loaded = true;
-        this.updateDom(self.config.animationSpeed);
+        this.updateDom(this.config.animationSpeed);
     },
 
     log: function(message) {
